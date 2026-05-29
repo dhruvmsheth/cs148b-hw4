@@ -41,6 +41,7 @@ def get_args():
     p.add_argument("--n_reflow_pairs", type=int,   default=50_000)
     p.add_argument("--reflow_steps",   type=int,   default=100,
                    help="Euler steps used to generate reflow pairs.")
+    p.add_argument("--wandb",          action="store_true", help="Log to W&B")
     return p.parse_args()
 
 
@@ -70,6 +71,16 @@ def main():
     args = get_args()
     os.makedirs(args.save_dir, exist_ok=True)
     device = torch.device(args.device)
+
+    if args.wandb:
+        import wandb
+        run_name = "train_rectflow_reflow" if args.reflow else "train_rectflow"
+        wandb.init(
+            entity="dsheth",
+            project="cs148b-hw4",
+            name=run_name,
+            config=vars(args),
+        )
 
     flow  = RectifiedFlow()
     model = UNet(in_channels=1, base_channels=64).to(device)
@@ -121,6 +132,9 @@ def main():
             epoch_loss = running / len(dataloader.dataset)
             train_losses.append(epoch_loss)
             print(f"Reflow epoch {epoch:3d}/{args.epochs} | loss {epoch_loss:.4f}")
+            if args.wandb:
+                import wandb
+                wandb.log({"train/loss": epoch_loss, "epoch": epoch})
             if epoch_loss < best_loss:
                 best_loss = epoch_loss
                 torch.save(model.state_dict(), Path(args.save_dir) / "best.pt")
@@ -138,6 +152,9 @@ def main():
             loss = train_one_epoch(model, flow, dataloader, optimizer, device)
             train_losses.append(loss)
             print(f"Epoch {epoch:3d}/{args.epochs} | loss {loss:.4f}")
+            if args.wandb:
+                import wandb
+                wandb.log({"train/loss": loss, "epoch": epoch})
             if loss < best_loss:
                 best_loss = loss
                 torch.save(model.state_dict(), Path(args.save_dir) / "best.pt")
@@ -145,6 +162,10 @@ def main():
     import numpy as np
     np.save(Path(args.save_dir) / "train_losses.npy", np.array(train_losses))
     print(f"Done. Best loss: {best_loss:.4f}")
+
+    if args.wandb:
+        import wandb
+        wandb.finish()
 
 
 if __name__ == "__main__":

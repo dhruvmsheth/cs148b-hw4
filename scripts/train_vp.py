@@ -37,6 +37,7 @@ def get_args():
     # Early stopping
     p.add_argument("--patience",  type=int,   default=10,
                    help="Stop if val loss does not improve for this many epochs. 0 = disabled.")
+    p.add_argument("--wandb",     action="store_true", help="Log to W&B")
     return p.parse_args()
 
 
@@ -53,30 +54,27 @@ def build_dataloader(batch_size: int):
 
 
 def score_loss(sde: VPSDE, model: torch.nn.Module, x0: torch.Tensor, device) -> torch.Tensor:
-    """DSM training loss for the VP score model.
-
-    Samples a random continuous time t ~ Uniform(0, 1), noises x0 to x_t
-    via the VP marginal, and regresses the score (or equivalently the noise).
-
-    Args:
-        sde:    VPSDE instance.
-        model:  Score network s_θ.
-        x0:     Clean images, shape (B, 1, 28, 28) in [-1, 1].
-        device: Compute device.
-
-    Returns:
-        Scalar loss.
-    """
-    # TODO (5.A.iii / 5.B setup) — implement the DSM loss.
-    # Hint: sample t ~ Uniform(0,1), call sde.marginal(), call model(x_t, t),
-    #       and compute the weighted MSE as in Song21 Eq. (7).
-    raise NotImplementedError
+    """DSM loss: sample t uniformly, noise x0, regress predicted noise."""
+    B = x0.shape[0]
+    t = torch.rand(B, device=device)
+    x_t, eps = sde.marginal(x0, t)
+    eps_pred = model(x_t, t)
+    return F.mse_loss(eps_pred, eps)
 
 
 def main():
     args = get_args()
     os.makedirs(args.save_dir, exist_ok=True)
     device = torch.device(args.device)
+
+    if args.wandb:
+        import wandb
+        wandb.init(
+            entity="dsheth",
+            project="cs148b-hw4",
+            name="train_vp",
+            config=vars(args),
+        )
 
     sde   = VPSDE(beta_min=args.beta_min, beta_max=args.beta_max, T=args.T)
     model = UNet(in_channels=1, base_channels=64).to(device)
@@ -115,6 +113,10 @@ def main():
         val_losses.append(val_loss)
         print(f"Epoch {epoch:3d}/{args.epochs} | train {train_loss:.4f} | val {val_loss:.4f}")
 
+        if args.wandb:
+            import wandb
+            wandb.log({"train/loss": train_loss, "val/loss": val_loss, "epoch": epoch})
+
         # Checkpoint
         if val_loss < best_val:
             best_val = val_loss
@@ -132,6 +134,10 @@ def main():
     np.save(Path(args.save_dir) / "train_losses.npy", np.array(train_losses))
     np.save(Path(args.save_dir) / "val_losses.npy",   np.array(val_losses))
     print(f"Training complete. Best val loss: {best_val:.4f}")
+
+    if args.wandb:
+        import wandb
+        wandb.finish()
 
 
 if __name__ == "__main__":

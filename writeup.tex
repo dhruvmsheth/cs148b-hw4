@@ -274,25 +274,18 @@ $S=1$ means perfectly straight trajectories (constant velocity field); $S=0$ mea
 
 \section*{Part 5: DDPM Implementation}
 
-See the submitted code and \href{https://colab.research.google.com/placeholder}{Colab Notebook}. Training curves and sample grids are shown in Figures~\ref{fig:ddpm-loss} and \ref{fig:ddpm-samples}.
+Training was run on a RunPod A100-SXM 80GB instance for 50 epochs on FashionMNIST.
+Code is in the submitted \texttt{diffusion/vp.py} and \texttt{scripts/train\_vp.py}.
 
 \begin{figure}[h]
-    \centering
-    \includegraphics[width=0.6\textwidth]{ddpm_training_loss.png}
-    \caption{DDPM training loss curve.}
-    \label{fig:ddpm-loss}
-\end{figure}
-
-\begin{figure}[h]
-    \centering
-    \includegraphics[width=0.6\textwidth]{ddpm_samples.png}
-    \caption{DDPM generated samples.}
-    \label{fig:ddpm-samples}
+\centering
+\includegraphics[width=0.72\textwidth]{ddpm_training_loss.pdf}
+\caption{VP-SDE training and validation DSM loss over 50 epochs on FashionMNIST.}
 \end{figure}
 
 \section*{Part 6: Score-Based and VP-SDE Sampling}
 
-See the submitted code and \href{https://colab.research.google.com/placeholder}{Colab Notebook}. The KID scores across sampling steps are reported in Table~\ref{tab:kid}.
+Training was run on a RunPod A100-SXM 80GB instance. The KID scores across sampling steps are reported in Table~\ref{tab:kid}.
 
 \begin{table}[h]
 \centering
@@ -313,20 +306,6 @@ The results show that RectFlow significantly outperforms VP EM at intermediate s
 
 \section*{Part 7: Rectified Flow}
 
-See the submitted code and \href{https://colab.research.google.com/placeholder}{Colab Notebook}. Sample grids for RectFlow and Reflow are shown in Figures~\ref{fig:rectflow-samples} and \ref{fig:reflow-samples}.
-
-\begin{figure}[h]
-    \centering
-    \includegraphics[width=0.6\textwidth]{rectflow_samples.png}
-    \caption{RectFlow generated samples.}
-    \label{fig:rectflow-samples}
-\end{figure}
-
-\begin{figure}[h]
-    \centering
-    \includegraphics[width=0.6\textwidth]{reflow_samples.png}
-    \caption{Reflow generated samples.}
-    \label{fig:reflow-samples}
-\end{figure}
+Code is in \texttt{diffusion/rectflow.py} and \texttt{scripts/train\_rectflow.py}.
 
 \end{document}

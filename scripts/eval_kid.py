@@ -91,7 +91,7 @@ def main():
     run = None
     if args.wandb:
         import wandb
-        run = wandb.init(entity="dhruvsheth", project="cs148b-hw4", name="eval_kid")
+        run = wandb.init(project="cs148b-hw4", name="eval_kid")
 
     # Load models
     sde = VPSDE(beta_min=args.beta_min, beta_max=args.beta_max, T=args.T)

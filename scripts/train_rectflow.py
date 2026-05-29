@@ -76,7 +76,6 @@ def main():
         import wandb
         run_name = "train_rectflow_reflow" if args.reflow else "train_rectflow"
         wandb.init(
-            entity="dhruvsheth",
             project="cs148b-hw4",
             name=run_name,
             config=vars(args),

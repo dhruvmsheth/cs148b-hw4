@@ -64,6 +64,14 @@ class VPSDE:
         x_t = c_t * x0 + s_t * eps
         return x_t, eps
 
+    def score(self, eps_model: nn.Module, x: Tensor, t: Tensor) -> Tensor:
+        """Convert eps prediction to score: s = -eps_theta(x,t) / sigma(t)."""
+        s_t = self.sigma(t)
+        while s_t.dim() < x.dim():
+            s_t = s_t.unsqueeze(-1)
+        eps = eps_model(x, t)
+        return -eps / (s_t + 1e-8)
+
     # ------------------------------------------------------------------
     # Samplers
     # ------------------------------------------------------------------
@@ -92,7 +100,7 @@ class VPSDE:
         for i in range(num_steps):
             t_val = 1.0 - i * dt
             t = torch.full((shape[0],), t_val, device=device)
-            score = score_model(x, t)
+            score = self.score(score_model, x, t)
 
             b = self.beta(t)
             while b.dim() < x.dim():
@@ -132,7 +140,7 @@ class VPSDE:
             t = torch.full((shape[0],), t_val, device=device)
 
             # Predictor: EM step
-            score = score_model(x, t)
+            score = self.score(score_model, x, t)
             b = self.beta(t)
             while b.dim() < x.dim():
                 b = b.unsqueeze(-1)
@@ -143,7 +151,7 @@ class VPSDE:
             t_next = max(t_val - dt, 1e-5)
             t_c = torch.full((shape[0],), t_next, device=device)
             for _ in range(n_corrector):
-                score_c = score_model(x, t_c)
+                score_c = self.score(score_model, x, t_c)
                 noise = torch.randn_like(x)
                 score_norm = score_c.view(shape[0], -1).norm(dim=-1).mean()
                 noise_norm = noise.view(shape[0], -1).norm(dim=-1).mean()
@@ -188,7 +196,7 @@ class VPSDE:
             # Forward diffuse the known pixels to time t
             x_known, _ = self.marginal(corrupted, t)
 
-            score = score_model(x, t)
+            score = self.score(score_model, x, t)
             b = self.beta(t)
             while b.dim() < x.dim():
                 b = b.unsqueeze(-1)

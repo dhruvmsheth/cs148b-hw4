@@ -70,7 +70,7 @@ def main():
     if args.wandb:
         import wandb
         wandb.init(
-            entity="dhruvsheth",
+            entity="dsheth_caltech",
             project="cs148b-hw4",
             name="train_vp",
             config=vars(args),

@@ -44,6 +44,7 @@ def load_model(model_path: str, device):
         'use_fp16': False,
         'use_new_attention_order': False,
         'learn_sigma': True,
+        'resblock_updown': True,
     })
     model, diffusion = create_model_and_diffusion(**{
         k: v for k, v in defaults.items()

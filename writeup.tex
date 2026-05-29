@@ -1,0 +1,332 @@
+\documentclass[11pt]{article}
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{graphicx}
+\usepackage{booktabs}
+
+\geometry{margin=1in}
+
+\title{EE/CS 148B HW4: Diffusion Models}
+\author{Dhruv Sheth}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section*{Part 1: DDPM}
+
+\subsection*{Problem 1.2 (Variational Bound)}
+
+We minimize $-\log p_\theta(x_0)$ to maximize likelihood. Computing $p_\theta(x_0)$ requires marginalizing over all latents $x_1, \ldots, x_T$, which is intractable. Instead we minimize the ELBO, which upper-bounds $-\log p_\theta(x_0)$ by Jensen's inequality applied to the concave log function:
+\[
+-\log p_\theta(x_0) \leq \mathbb{E}_q\left[-\log \frac{p_\theta(x_{0:T})}{q(x_{1:T}|x_0)}\right].
+\]
+Specifically, $-\log p_\theta(x_0) = -\log \mathbb{E}_q\left[\frac{p_\theta(x_{0:T})}{q(x_{1:T}|x_0)}\right] \leq \mathbb{E}_q\left[-\log \frac{p_\theta(x_{0:T})}{q(x_{1:T}|x_0)}\right]$, where the inequality is Jensen's. The chain of inequalities in Eq.~(3) follows by expanding the joint and Markov structure.
+
+\subsection*{Problem 1.3 (Tractable Loss)}
+
+\textbf{Eq.~(18):} The posterior $q(x_{t-1}|x_t, x_0)$ has a closed-form Gaussian because $q(x_t|x_{t-1})$ and $q(x_{t-1}|x_0)$ are both Gaussian, and the product of Gaussian densities is proportional to a Gaussian.
+
+\textbf{Eq.~(20):} When both distributions have the same variance, the KL between two Gaussians reduces to $\frac{1}{2\sigma^2}\|\mu_1 - \mu_2\|^2$ by the standard closed-form KL formula.
+
+\textbf{Eq.~(21):} Reparametrizing $x_t = \sqrt{\bar\alpha_t}\, x_0 + \sqrt{1-\bar\alpha_t}\,\varepsilon$ with $\varepsilon \sim \mathcal{N}(0, I)$ lets us compute the loss without simulating the full Markov chain.
+
+\textbf{Eq.~(22):} Substituting the optimal $\mu_\theta$ parameterization from Eq.~(11) into Eq.~(10) and simplifying yields Eq.~(22).
+
+\subsection*{Problem 1.4}
+
+\textbf{Claim:} $q(x_t | x_0) = \mathcal{N}\!\left(\sqrt{\bar\alpha_t}\, x_0,\; (1 - \bar\alpha_t) I\right)$, where $\bar\alpha_t = \prod_{i=1}^t (1-\beta_i)$.
+
+\begin{proof}
+By induction on $t$.
+
+\textbf{Base case ($t=1$):} By definition $q(x_1|x_0) = \mathcal{N}(\sqrt{1-\beta_1}\,x_0, \beta_1 I)$. Since $\alpha_1 = 1-\beta_1$ and $\bar\alpha_1 = \alpha_1$, this equals $\mathcal{N}(\sqrt{\bar\alpha_1}\,x_0, (1-\bar\alpha_1)I)$.
+
+\textbf{Inductive step:} Assume $q(x_{t-1}|x_0) = \mathcal{N}(\sqrt{\bar\alpha_{t-1}}\,x_0, (1-\bar\alpha_{t-1})I)$. The transition is $x_t = \sqrt{1-\beta_t}\,x_{t-1} + \sqrt{\beta_t}\,\varepsilon_t$ with $\varepsilon_t \sim \mathcal{N}(0,I)$ independent of $x_{t-1}$. Then:
+\begin{align*}
+\mathbb{E}[x_t | x_0] &= \sqrt{1-\beta_t}\cdot\sqrt{\bar\alpha_{t-1}}\,x_0 = \sqrt{\alpha_t \bar\alpha_{t-1}}\,x_0 = \sqrt{\bar\alpha_t}\,x_0, \\
+\mathrm{Var}[x_t | x_0] &= (1-\beta_t)(1-\bar\alpha_{t-1}) + \beta_t = 1 - \bar\alpha_{t-1} + \bar\alpha_{t-1}\beta_t - \beta_t + \beta_t \\
+&= 1 - (1-\beta_t)\bar\alpha_{t-1} = 1 - \alpha_t\bar\alpha_{t-1} = 1 - \bar\alpha_t.
+\end{align*}
+Since $x_t$ is an affine transformation of jointly Gaussian variables, $q(x_t|x_0) = \mathcal{N}(\sqrt{\bar\alpha_t}\,x_0, (1-\bar\alpha_t)I)$.
+\end{proof}
+
+\subsection*{Problem 1.5}
+
+\textbf{Claim:} $q(x_{t-1}|x_t, x_0)$ is Gaussian with mean and variance given by Eqs.~(6) and (7).
+
+\begin{proof}
+By Bayes' rule and the Markov property:
+\[
+q(x_{t-1}|x_t, x_0) \propto q(x_t|x_{t-1})\, q(x_{t-1}|x_0).
+\]
+Both factors are Gaussian. Let $q(x_t|x_{t-1}) = \mathcal{N}(\sqrt{\alpha_t}\,x_{t-1}, \beta_t I)$ and $q(x_{t-1}|x_0) = \mathcal{N}(\sqrt{\bar\alpha_{t-1}}\,x_0, (1-\bar\alpha_{t-1})I)$. The product of two Gaussian densities in $x_{t-1}$ is proportional to a Gaussian with precision and mean:
+\[
+\frac{1}{\tilde\sigma_t^2} = \frac{\alpha_t}{\beta_t} + \frac{1}{1-\bar\alpha_{t-1}}, \qquad
+\frac{\tilde\mu_t}{\tilde\sigma_t^2} = \frac{\sqrt{\alpha_t}}{\beta_t}\,x_t + \frac{\sqrt{\bar\alpha_{t-1}}}{1-\bar\alpha_{t-1}}\,x_0.
+\]
+Computing $\tilde\sigma_t^2$:
+\[
+\frac{1}{\tilde\sigma_t^2} = \frac{\alpha_t(1-\bar\alpha_{t-1}) + \beta_t}{\beta_t(1-\bar\alpha_{t-1})} = \frac{1-\bar\alpha_t}{\beta_t(1-\bar\alpha_{t-1})},
+\]
+so
+\[
+\tilde\sigma_t^2 = \frac{\beta_t(1-\bar\alpha_{t-1})}{1-\bar\alpha_t}.
+\]
+Multiplying through for $\tilde\mu_t$:
+\[
+\tilde\mu_t = \frac{\sqrt{\alpha_t}(1-\bar\alpha_{t-1})}{1-\bar\alpha_t}\,x_t + \frac{\sqrt{\bar\alpha_{t-1}}\,\beta_t}{1-\bar\alpha_t}\,x_0,
+\]
+which are Eqs.~(6) and (7).
+\end{proof}
+
+\subsection*{Problem 1.6}
+
+The KL between two Gaussians $\mathcal{N}(\mu_1, \sigma^2 I)$ and $\mathcal{N}(\mu_2, \sigma^2 I)$ with equal diagonal covariance $\sigma^2 I$ is:
+\[
+D_\mathrm{KL}(\mathcal{N}(\mu_1, \sigma^2 I) \| \mathcal{N}(\mu_2, \sigma^2 I)) = \frac{1}{2\sigma^2}\|\mu_1 - \mu_2\|^2.
+\]
+In the DDPM loss, $L_{t-1} = D_\mathrm{KL}(q(x_{t-1}|x_t, x_0) \| p_\theta(x_{t-1}|x_t))$. Taking $q(x_{t-1}|x_t,x_0) = \mathcal{N}(\tilde\mu_t, \tilde\sigma_t^2 I)$ and $p_\theta(x_{t-1}|x_t) = \mathcal{N}(\mu_\theta(x_t,t), \tilde\sigma_t^2 I)$ (same variance), we get:
+\[
+L_{t-1} = \frac{1}{2\tilde\sigma_t^2}\mathbb{E}\!\left[\|\tilde\mu_t(x_t, x_0) - \mu_\theta(x_t, t)\|^2\right].
+\]
+Setting $\sigma_t^2 = \tilde\sigma_t^2 = \beta_t$ (as in the paper's simplified setting) gives:
+\[
+L_{t-1} - C = \mathbb{E}\left[\frac{1}{2\beta_t}\|\tilde\mu_t - \mu_\theta\|^2\right],
+\]
+where $C$ absorbs terms that do not depend on $\theta$.
+
+\subsection*{Problem 1.7}
+
+From Eq.~(11), $\mu_\theta(x_t, t) = \frac{1}{\sqrt{\alpha_t}}\left(x_t - \frac{\beta_t}{\sqrt{1-\bar\alpha_t}}\varepsilon_\theta(x_t, t)\right)$ and the true posterior mean is $\tilde\mu_t = \frac{1}{\sqrt{\alpha_t}}\left(x_t - \frac{\beta_t}{\sqrt{1-\bar\alpha_t}}\varepsilon\right)$. Substituting into Eq.~(10):
+\begin{align*}
+L_{t-1} - C &= \mathbb{E}\left[\frac{1}{2\tilde\sigma_t^2}\|\tilde\mu_t - \mu_\theta\|^2\right] \\
+&= \mathbb{E}\left[\frac{1}{2\tilde\sigma_t^2}\cdot\frac{\beta_t^2}{\alpha_t(1-\bar\alpha_t)}\|\varepsilon - \varepsilon_\theta(\sqrt{\bar\alpha_t}\,x_0 + \sqrt{1-\bar\alpha_t}\,\varepsilon,\, t)\|^2\right] \\
+&= \mathbb{E}\left[\frac{\beta_t^2}{2\sigma_t^2 \alpha_t(1-\bar\alpha_t)}\|\varepsilon - \varepsilon_\theta(\sqrt{\bar\alpha_t}\,x_0 + \sqrt{1-\bar\alpha_t}\,\varepsilon,\, t)\|^2\right],
+\end{align*}
+which is Eq.~(12).
+
+\subsection*{Problem 1.8 (Coefficient Plot)}
+
+See submitted plot. The weighting coefficient $\frac{\beta_t^2}{2\sigma_t^2 \alpha_t(1-\bar\alpha_t)}$ is larger for small $t$ (near the end of denoising, fine-grained steps) and smaller for large $t$. The simplified objective drops these coefficients, effectively down-weighting the loss at small $t$. This has been empirically shown to improve sample quality, as it prevents the model from over-optimizing the easy, low-noise denoising steps at the expense of learning the harder, high-noise steps.
+
+\section*{Part 2: Score Matching}
+
+\subsection*{Problem 2.2}
+
+The explicit score matching objective requires computing $\nabla_x \log p(x)$, the score of the true data distribution. For complex distributions $p(x)$, this is intractable since we do not have an analytic form for $p(x)$, only samples from it.
+
+\subsection*{Problem 2.3}
+
+\textbf{Claim:} $J_\mathrm{ESM}(\theta) = J_\mathrm{ISM}(\theta) + C$ where $C$ does not depend on $\theta$.
+
+\begin{proof}
+Expand the ESM objective:
+\[
+J_\mathrm{ESM}(\theta) = \mathbb{E}_p\!\left[\|s_\theta(x) - \nabla_x \log p(x)\|^2\right] = \mathbb{E}_p\!\left[\|s_\theta\|^2\right] - 2\,\mathbb{E}_p\!\left[s_\theta \cdot \nabla_x \log p\right] + \underbrace{\mathbb{E}_p\!\left[\|\nabla_x \log p\|^2\right]}_{=\,C}.
+\]
+For the cross term, note $\nabla_x \log p(x) = \nabla_x p(x)/p(x)$, so:
+\[
+\mathbb{E}_p[s_\theta \cdot \nabla_x \log p] = \int s_\theta(x)\, \nabla_x p(x)\, dx.
+\]
+Integrating by parts (boundary terms vanish as $p(x) \to 0$ at infinity):
+\[
+\int s_\theta(x)\, \nabla_x p(x)\, dx = -\int (\nabla_x \cdot s_\theta(x))\, p(x)\, dx = -\mathbb{E}_p[\mathrm{tr}(\nabla_x s_\theta(x))].
+\]
+Therefore:
+\[
+J_\mathrm{ESM}(\theta) = \mathbb{E}_p\!\left[\mathrm{tr}(\nabla_x s_\theta(x)) + \tfrac{1}{2}\|s_\theta(x)\|^2\right] + C = J_\mathrm{ISM}(\theta) + C.
+\]
+\end{proof}
+
+\subsection*{Problem 2.4}
+
+The ISM objective requires computing $\mathrm{tr}(\nabla_x s_\theta(x))$, the trace of the Jacobian of $s_\theta$. Naively this requires $O(d)$ backward passes (one per output dimension), making it $O(d)$ times more expensive than a single forward pass. For high-dimensional data (e.g., $d = 784$ for $28\times28$ images), this is prohibitively expensive.
+
+\subsection*{Problem 2.5 (Tweedie's Formula)}
+
+\textbf{Claim:} For $\tilde{x} = x + \sigma \varepsilon$, $\varepsilon \sim \mathcal{N}(0,I)$, we have $\mathbb{E}[x|\tilde{x}] = \tilde{x} + \sigma^2 \nabla_{\tilde{x}} \log p_\sigma(\tilde{x})$.
+
+\begin{proof}
+The marginal density is $p_\sigma(\tilde{x}) = \int p(x)\, \phi_\sigma(\tilde{x}-x)\, dx$ where $\phi_\sigma(u) = (2\pi\sigma^2)^{-d/2}\exp(-\|u\|^2/(2\sigma^2))$.
+
+Taking the gradient:
+\[
+\nabla_{\tilde{x}} \log p_\sigma(\tilde{x}) = \frac{\nabla_{\tilde{x}} p_\sigma(\tilde{x})}{p_\sigma(\tilde{x})} = \frac{\int p(x)\, \nabla_{\tilde{x}} \phi_\sigma(\tilde{x}-x)\, dx}{p_\sigma(\tilde{x})}.
+\]
+Since $\nabla_{\tilde{x}} \phi_\sigma(\tilde{x}-x) = -\frac{\tilde{x}-x}{\sigma^2}\phi_\sigma(\tilde{x}-x)$, we get:
+\[
+\nabla_{\tilde{x}} \log p_\sigma(\tilde{x}) = \frac{\int p(x)\cdot\left(-\frac{\tilde{x}-x}{\sigma^2}\right)\phi_\sigma(\tilde{x}-x)\,dx}{p_\sigma(\tilde{x})} = -\frac{\tilde{x} - \mathbb{E}[x|\tilde{x}]}{\sigma^2}.
+\]
+Rearranging: $\mathbb{E}[x|\tilde{x}] = \tilde{x} + \sigma^2 \nabla_{\tilde{x}} \log p_\sigma(\tilde{x})$.
+\end{proof}
+
+\subsection*{Problem 2.6 (DSM)}
+
+The Tweedie-based training objective minimizes:
+\[
+\mathbb{E}_{x, \tilde{x}}\!\left[\left\|s_\theta(\tilde{x}) - \nabla_{\tilde{x}} \log p(\tilde{x}|x)\right\|^2\right] = \mathbb{E}_{x,\varepsilon}\!\left[\left\|s_\theta(x + \sigma\varepsilon) + \frac{\varepsilon}{\sigma}\right\|^2\right],
+\]
+since $\nabla_{\tilde{x}} \log p(\tilde{x}|x) = -(\tilde{x}-x)/\sigma^2 = -\varepsilon/\sigma$. Expanding:
+\[
+= \mathbb{E}\!\left[\|s_\theta(\tilde{x})\|^2 + \frac{2}{\sigma}s_\theta(\tilde{x})\cdot\varepsilon + \frac{\|\varepsilon\|^2}{\sigma^2}\right].
+\]
+The last term is constant in $\theta$, so this equals the DSM objective up to a constant independent of $\theta$.
+
+\subsection*{Problem 2.7 (DSM vs DDPM)}
+
+The DDPM noise predictor $\varepsilon_\theta$ and the DSM score $s_\theta$ are related by $s_\theta(x_t, t) = -\varepsilon_\theta(x_t, t)/\sigma_t$, where $\sigma_t = \sqrt{1-\bar\alpha_t}$.
+
+The DSM objective is $\mathbb{E}\|s_\theta(x_t) - \nabla_{x_t} \log p_{\sigma_t}(x_t)\|^2$. Substituting $s_\theta = -\varepsilon_\theta/\sigma_t$ and $\nabla_{x_t}\log p_{\sigma_t}(x_t) = -\varepsilon/\sigma_t$:
+\[
+\mathbb{E}\left\|\frac{-\varepsilon_\theta}{\sigma_t} - \frac{-\varepsilon}{\sigma_t}\right\|^2 = \frac{1}{\sigma_t^2}\mathbb{E}\|\varepsilon_\theta - \varepsilon\|^2,
+\]
+which matches the DDPM noise prediction objective up to the constant $c(\sigma_t) = 1/\sigma_t^2$.
+
+\subsection*{Problem 2.8 (Langevin Dynamics)}
+
+To sample from $p(x)$ using a learned score $s_\theta$, run Langevin dynamics: initialize $x_0 \sim q(x)$ (e.g., Gaussian), then iterate
+\[
+x_{k+1} = x_k + \frac{\delta}{2}\, s_\theta(x_k) + \sqrt{\delta}\, z_k, \quad z_k \sim \mathcal{N}(0, I),
+\]
+for $K$ steps with step size $\delta > 0$. For small $\sigma$, $p_\sigma \approx p(x)$, so using the score learned under noise level $\sigma$ gives samples approximately from $p(x)$. After enough steps, the chain converges to $p_\sigma \approx p(x)$.
+
+\section*{Part 3: Score-Based SDEs}
+
+\subsection*{Problem 3.2}
+
+Two approximations used to recover the DDPM forward process from the VP-SDE discretization:
+
+(1) $e^{-\frac{1}{2}\beta_i\,\Delta t} \approx 1 - \frac{1}{2}\beta_i\,\Delta t$ by first-order Taylor expansion, valid when $\Delta t \ll 1$.
+
+(2) $(1 - \beta_i\,\Delta t)^{1/2} \approx 1 - \frac{1}{2}\beta_i\,\Delta t$ by the same first-order approximation.
+
+\subsection*{Problem 3.3}
+
+By Anderson (1982), the reverse SDE for the VP-SDE is:
+\[
+dx = \left[-\frac{1}{2}\beta(t)\, x - \beta(t)\,\nabla_x \log p_t(x)\right]dt + \sqrt{\beta(t)}\, d\bar{B}_t,
+\]
+where $\bar{B}_t$ is a standard Brownian motion running backward in time.
+
+\subsection*{Problem 3.4}
+
+Discretize the reverse VP-SDE with step size $\Delta t = 1/T$ at time $t = (T-i)/T$. Set $\beta(t)\Delta t = \beta_i$. Approximating $e^{-\beta_i/2} \approx \sqrt{\alpha_i}$ and using $\nabla_x \log p_t(x_t) \approx -\varepsilon_\theta(x_t, t)/\sqrt{1-\bar\alpha_t}$, the discretization becomes:
+\[
+x_{t-1} = \frac{1}{\sqrt{\alpha_t}}\left(x_t - \frac{1-\alpha_t}{\sqrt{1-\bar\alpha_t}}\varepsilon_\theta(x_t,t)\right) + \sqrt{\beta_t}\, z,\quad z \sim \mathcal{N}(0,I),
+\]
+which is exactly the DDPM ancestral sampling update.
+
+\subsection*{Problem 3.5}
+
+The coefficient difference between the SDE derivation and DDPM arises from the relationship $s_\theta = -\varepsilon_\theta/\sigma_t$. In the reverse SDE, $\nabla_x \log p_t(x)$ appears directly. Substituting $\nabla_x \log p_t \approx -\varepsilon_\theta/\sqrt{1-\bar\alpha_t}$ into the SDE and simplifying using $1-\alpha_t = \beta_t$ recovers the DDPM coefficient $\beta_t/\sqrt{1-\bar\alpha_t}$.
+
+\subsection*{Problem 3.6}
+
+The reverse SDE uses a time-varying diffusion coefficient $g(t) = \sqrt{\beta(t)}$ and a time-conditioned score $s_\theta(x_t, t)$ that encodes the full trajectory structure. Langevin dynamics uses a fixed noise level $\sigma$ and a fixed score, without exploiting the time structure.
+
+In practice, this means DDPM trains a single network $\varepsilon_\theta(x_t, t)$ conditioned on time, whereas standard Langevin would require a separate model for each noise level. The SDE framework gives a principled way to schedule noise levels and leverage the continuous-time structure for sampling.
+
+\subsection*{Problem 3.7}
+
+By Bayes' rule: $\nabla_x \log p_t(x|y) = \nabla_x \log p_t(x) + \nabla_x \log p_t(y|x)$.
+
+For classifier guidance, train a time-conditional classifier $p_\phi(y|x_t, t)$ and substitute $\nabla_x \log p_t(y|x) \approx \nabla_x \log p_\phi(y|x_t, t)$. Then run the reverse SDE with the combined score:
+\[
+\tilde{s}(x_t, t) = s_\theta(x_t, t) + w\,\nabla_{x_t} \log p_\phi(y|x_t, t),
+\]
+where $w \geq 1$ is a guidance scale. This steers the samples toward class $y$ while maintaining image quality.
+
+\section*{Part 4: Rectified Flow}
+
+\subsection*{Problem 4.1}
+
+Differentiating the rectified flow objective $L_\mathrm{RF}(\theta) = \mathbb{E}\|v_\theta(X_t, t) - (X_1 - X_0)\|^2$ over the distribution of $(X_0, X_1, t)$ and setting to zero, the minimizer satisfies:
+\[
+v^*(x, t) = \mathbb{E}[X_1 - X_0 \mid X_t = x].
+\]
+This follows because the MSE objective is minimized pointwise by the conditional mean.
+
+\subsection*{Problem 4.2}
+
+Since $X_t = (1-t)X_0 + tX_1$, we have $X_1 - X_0 = (X_t - X_0)/(t) + X_0 - X_0 \cdot \ldots$. More directly, $X_t - X_0 = t(X_1 - X_0)$, so $(X_1 - X_0) = (X_t - X_0)/t$. Then:
+\[
+v^*(x, t) = \frac{x - \mathbb{E}[X_0 | X_t = x]}{t}.
+\]
+By Tweedie's formula applied to the marginal $p_t(x)$ (with $\sigma_t^2 = t^2(1-\sigma_{\min}^2)$ in the appropriate noise schedule), $\mathbb{E}[X_0|X_t=x] = x + \sigma_t^2\,\nabla_x \log p_t(x)$. Substituting connects $v^*$ to the score function $\nabla_x \log p_t(x)$.
+
+\subsection*{Problem 4.3}
+
+$S=1$ means perfectly straight trajectories (constant velocity field); $S=0$ means maximally curved paths. Reflow straightens trajectories by re-training $v_\theta$ on $(X_0', X_1')$ pairs generated by running the learned ODE, so the new pairs are already coupled by the flow. These pairs have fewer crossings, and re-training on them produces a straighter velocity field. Each round of reflow has diminishing returns, so 1--2 rounds typically suffice. The cost is one additional training run plus generating approximately 50K pairs, comparable to one training run.
+
+\subsection*{Problem 4.4}
+
+\begin{enumerate}
+    \item \textbf{Training targets:} DDPM regresses the noise $\varepsilon$ added at step $t$. Rectified flow regresses the velocity $X_1 - X_0$. The two targets differ by a $\sigma_t$ scaling, since $\varepsilon \propto \sigma_t (X_1 - X_0)$ under the corresponding noise schedule.
+
+    \item \textbf{Inference:} DDPM requires approximately 1000 steps because it follows a stochastic SDE trajectory. After reflow, rectified flow can generate samples in a single step since the ODE trajectories are straight and the Euler method is exact for linear flows.
+
+    \item \textbf{Geometry:} DDPM follows a curved SDE path through data space, requiring small step sizes to control discretization error. Rectified flow follows straight lines, which have smaller discretization error and allow fewer function evaluations.
+
+    \item \textbf{Likelihood:} DDPM provides the ELBO as a variational lower bound on $\log p(x_0)$. Rectified flow is a continuous normalizing flow, so exact likelihood is computable via the instantaneous change-of-variables formula (change-of-variables theorem for ODEs), though evaluating the log-determinant of the Jacobian is expensive without special structure.
+\end{enumerate}
+
+\section*{Part 5: DDPM Implementation}
+
+See the submitted code and \href{https://colab.research.google.com/placeholder}{Colab Notebook}. Training curves and sample grids are shown in Figures~\ref{fig:ddpm-loss} and \ref{fig:ddpm-samples}.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.6\textwidth]{ddpm_training_loss.png}
+    \caption{DDPM training loss curve.}
+    \label{fig:ddpm-loss}
+\end{figure}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.6\textwidth]{ddpm_samples.png}
+    \caption{DDPM generated samples.}
+    \label{fig:ddpm-samples}
+\end{figure}
+
+\section*{Part 6: Score-Based and VP-SDE Sampling}
+
+See the submitted code and \href{https://colab.research.google.com/placeholder}{Colab Notebook}. The KID scores across sampling steps are reported in Table~\ref{tab:kid}.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lrrrrrrr}
+\toprule
+Method & 1 step & 5 steps & 10 steps & 50 steps & 100 steps & 200 steps & 1000 steps \\
+\midrule
+VP EM     & 0.5517 & 0.3990 & 0.3334 & 0.1187 & 0.0760 & 0.0600 & 0.0512 \\
+RectFlow  & 0.3845 & 0.0263 & 0.0131 & 0.0060 & 0.0067 & 0.0049 & 0.0065 \\
+Reflow    & 0.0456 & 0.0157 & 0.0156 & 0.0141 & 0.0137 & 0.0134 & 0.0123 \\
+\bottomrule
+\end{tabular}
+\caption{KID scores for VP Euler--Maruyama, RectFlow, and Reflow at various sampling steps.}
+\label{tab:kid}
+\end{table}
+
+The results show that RectFlow significantly outperforms VP EM at intermediate step counts (5--50 steps), and Reflow achieves the best 1-step KID by a large margin (0.0456 vs 0.3845 for RectFlow), demonstrating the effectiveness of trajectory straightening for few-step generation.
+
+\section*{Part 7: Rectified Flow}
+
+See the submitted code and \href{https://colab.research.google.com/placeholder}{Colab Notebook}. Sample grids for RectFlow and Reflow are shown in Figures~\ref{fig:rectflow-samples} and \ref{fig:reflow-samples}.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.6\textwidth]{rectflow_samples.png}
+    \caption{RectFlow generated samples.}
+    \label{fig:rectflow-samples}
+\end{figure}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.6\textwidth]{reflow_samples.png}
+    \caption{Reflow generated samples.}
+    \label{fig:reflow-samples}
+\end{figure}
+
+\end{document}

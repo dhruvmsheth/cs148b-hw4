@@ -4,6 +4,7 @@
 \usepackage{hyperref}
 \usepackage{graphicx}
 \usepackage{booktabs}
+\usepackage{float}
 
 \geometry{margin=1in}
 
@@ -275,12 +276,39 @@ $S=1$ means perfectly straight trajectories (constant velocity field); $S=0$ mea
 \section*{Part 5: DDPM Implementation}
 
 Training was run on a RunPod A100-SXM 80GB instance for 50 epochs on FashionMNIST.
-Code is in the submitted \texttt{diffusion/vp.py} and \texttt{scripts/train\_vp.py}.
+Code is in \texttt{diffusion/vp.py} and \texttt{scripts/train\_vp.py}.
 
-\begin{figure}[h]
+\subsection*{Problem 5.A: VP-SDE Coefficients}
+
+The VP-SDE forward process is $dx = f(x,t)\,dt + g(t)\,dB_t$ where:
+\begin{itemize}
+  \item \textbf{Drift coefficient:} $f(x,t) = -\tfrac{1}{2}\beta(t)\,x$
+  \item \textbf{Diffusion coefficient:} $g(t) = \sqrt{\beta(t)}$
+\end{itemize}
+with linear schedule $\beta(t) = \beta_{\min} + (\beta_{\max} - \beta_{\min})\,t$.
+
+\subsection*{Problem 5.C: Training and Samples}
+
+\begin{figure}[H]
 \centering
-\includegraphics[width=0.72\textwidth]{ddpm_training_loss.pdf}
-\caption{VP-SDE training and validation DSM loss over 50 epochs on FashionMNIST.}
+\includegraphics[width=0.72\textwidth]{figures/vp_training_curves.pdf}
+\caption{VP-SDE training and validation DSM loss over 50 epochs on FashionMNIST. Final best val loss: 0.072.}
+\end{figure}
+
+Euler--Maruyama samples at 1000 steps:
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.65\textwidth]{figures/em_steps1000.png}
+\caption{VP-SDE EM samples (1000 steps). FashionMNIST clothing items are clearly recognizable.}
+\end{figure}
+
+Predictor-Corrector samples at 1000 steps (1 corrector step, SNR=0.16):
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.65\textwidth]{figures/pc_steps1000_corr1.png}
+\caption{VP-SDE PC samples (1000 predictor steps, 1 corrector). Slightly sharper than EM at the same step count.}
 \end{figure}
 
 \section*{Part 6: Score-Based and VP-SDE Sampling}
@@ -298,14 +326,54 @@ RectFlow  & 0.3845 & 0.0263 & 0.0131 & 0.0060 & 0.0067 & 0.0049 & 0.0065 \\
 Reflow    & 0.0456 & 0.0157 & 0.0156 & 0.0141 & 0.0137 & 0.0134 & 0.0123 \\
 \bottomrule
 \end{tabular}
-\caption{KID scores for VP Euler--Maruyama, RectFlow, and Reflow at various sampling steps.}
+\caption{KID scores for VP EM, RectFlow, and Reflow at various sampling steps.}
 \label{tab:kid}
 \end{table}
 
-The results show that RectFlow significantly outperforms VP EM at intermediate step counts (5--50 steps), and Reflow achieves the best 1-step KID by a large margin (0.0456 vs 0.3845 for RectFlow), demonstrating the effectiveness of trajectory straightening for few-step generation.
+RectFlow significantly outperforms VP EM at 5--50 steps because flow matching learns straight trajectories that the Euler integrator handles with low error. Reflow achieves the best 1-step KID (0.046 vs 0.385 for RectFlow) by straightening trajectories further, making the single-step Euler approximation nearly exact.
+
+\subsection*{Problem 6.B: Qualitative Comparison}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{figures/comparison_grid.png}
+\caption{Samples from VP EM (row 1), RectFlow (row 2), and Reflow (row 3) at various step counts.
+RectFlow produces clean samples at 10+ steps; Reflow produces recognizable clothing at a single step.}
+\end{figure}
 
 \section*{Part 7: Rectified Flow}
 
 Code is in \texttt{diffusion/rectflow.py} and \texttt{scripts/train\_rectflow.py}.
+
+\subsection*{Problem 7.A: RectFlow Training}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.65\textwidth]{figures/rectflow_training_curves.pdf}
+\caption{RectFlow and Reflow training loss over 50 epochs. Reflow converges to a lower loss because
+it trains on straighter (ODE-generated) pairs.}
+\end{figure}
+
+RectFlow samples at 100 steps:
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.65\textwidth]{figures/rf_steps100.png}
+\caption{RectFlow samples at 100 Euler steps. Sharp and diverse clothing images.}
+\end{figure}
+
+Reflow at 1 step vs.\ 10 steps:
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.48\textwidth}
+\includegraphics[width=\textwidth]{figures/reflow_steps1.png}
+\end{minipage}\hfill
+\begin{minipage}{0.48\textwidth}
+\includegraphics[width=\textwidth]{figures/reflow_steps10.png}
+\end{minipage}
+\caption{Reflow at 1 step (left) and 10 steps (right). Single-step generation is already recognizable
+after trajectory straightening.}
+\end{figure}
 
 \end{document}
